@@ -3,6 +3,7 @@ require("@nomicfoundation/hardhat-toolbox");
 require("@nomiclabs/hardhat-ethers");
 require("hardhat-deploy");
 require("hardhat-deploy-ethers");
+const { removeConsoleLog } = require("hardhat-preprocessor");
 
 dotenv.config()
 
@@ -16,6 +17,12 @@ module.exports = {
                 enabled: true
             }
         }
+    },
+    preprocess: {
+        eachLine: removeConsoleLog(
+          (bre) =>
+            bre.network.name !== "hardhat" && bre.network.name !== "localhost"
+        ),
     },
     defaultNetwork: 'hardhat',
     paths: {
@@ -39,23 +46,25 @@ module.exports = {
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["staging"]
+        },
+        mumbai: {
+            chainId: 80001,
+            url: `https://polygon-mumbai.infura.io/v3/${process.env.INFURA_KEY}`,
+            accounts: [process.env.ACCOUNT_PRIVATE_KEY],
+            live: true,
+            tags: ["staging"],
         }
     },
     namedAccounts: {
-        deployer: {
-            default: 0, // here this will by default take the first account as deployer
-        },
-        UniswapV3Factory: {
-            default: "0x1F98431c8aD98523631AE4a59f267346ea31F984",
-        },
+        spender: { default: 0 },
+        deployer: { default: 1 },
+        other: { default: 2 },
+        // known contract addresses
         UniswapV3NonfungiblePositionManager: {
             default: "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
         },
         UniswapV3SwapRouter: {
             default: "0xE592427A0AEce92De3Edee1F18E0157C05861564"
         },
-        WETH9: {
-            default: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-        }
     }
 }

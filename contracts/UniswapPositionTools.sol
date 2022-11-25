@@ -33,22 +33,17 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
     uint32 public override maxTWAPTickDifference = 100; // 1%
     uint32 public override TWAPSeconds = 60;
 
-    // wrapped native token address
-    address override public weth;
     // uniswap v3 components
     IUniswapV3Factory public override factory;
     INonfungiblePositionManager public override nonfungiblePositionManager;
     ISwapRouter public override swapRouter;
 
     constructor(
-        address _weth,
-        IUniswapV3Factory _factory,
         INonfungiblePositionManager _nonfungiblePositionManager,
         ISwapRouter _swapRouter
     ) {
-        weth = _weth;
-        factory = _factory;
         nonfungiblePositionManager = _nonfungiblePositionManager;
+        factory = IUniswapV3Factory(nonfungiblePositionManager.factory());
         swapRouter = _swapRouter;
     }
 
@@ -69,11 +64,19 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         int24 tickUpper;
     }
 
+    function _onlyPositionOwner(uint256 tokenId) view internal {
+        require(
+            nonfungiblePositionManager.ownerOf(tokenId) == msg.sender,
+            'Only token owner can change'
+        );
+    }
+
     function swapAndCompound(
         uint256 tokenId
     ) override external nonReentrant returns (
         uint256 compounded0, uint256 compounded1
     ) {
+        _onlyPositionOwner(tokenId);
         CompoundState memory state;
         // collect fees
         (state.amount0, state.amount1) = nonfungiblePositionManager.collect(
@@ -112,6 +115,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
             SafeERC20.safeIncreaseAllowance(
                 IERC20(state.token1), address(nonfungiblePositionManager), state.amount1
             );
+
             // deposit liquidity into tokenId
             (, compounded0, compounded1) = nonfungiblePositionManager.increaseLiquidity(
                 INonfungiblePositionManager.IncreaseLiquidityParams(
@@ -132,15 +136,15 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
 
     function remint(
         uint256 tokenId, int24 tickLower, int24 tickUpper
-    ) override external returns (
+    ) override external nonReentrant returns (
         uint256 newTokenId, uint256 amount0, uint256 amount1
     ) {
+        _onlyPositionOwner(tokenId);
         CompoundState memory state;
         // get position info
         uint128 liquidity;
         (, , state.token0, state.token1, state.fee, , , liquidity, , , , ) =
             nonfungiblePositionManager.positions(tokenId);
-
         // remove liquidity
         (state.amount0, state.amount1) = nonfungiblePositionManager.decreaseLiquidity(
             INonfungiblePositionManager.DecreaseLiquidityParams(
@@ -153,6 +157,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
                 tokenId, address(this), type(uint128).max, type(uint128).max
             )
         );
+        nonfungiblePositionManager.burn(tokenId);
         // checks oracle for fair price - swaps to position ratio (considering estimated reward) - calculates max amount to be added
         (
             state.amount0, state.amount1, state.priceX96
@@ -177,16 +182,16 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         );
 
         // mint new position
-        (
-            newTokenId, , amount0, amount1
-        ) = nonfungiblePositionManager.mint(INonfungiblePositionManager.MintParams(
-            state.token0, state.token1, state.fee,
-            tickLower, tickUpper,
-            state.amount0, state.amount1,
-            0, 0,
-            msg.sender,
-            block.timestamp
-        ));
+        (newTokenId, , amount0, amount1) = nonfungiblePositionManager.mint(
+            INonfungiblePositionManager.MintParams(
+                state.token0, state.token1, state.fee,
+                tickLower, tickUpper,
+                state.amount0, state.amount1,
+                0, 0,
+                msg.sender,
+                block.timestamp
+            )
+        );
 
         // calculate and transfer remaining tokens for owner
         SafeERC20.safeTransfer(IERC20(state.token0), msg.sender, state.amount0.sub(amount0));
@@ -195,25 +200,26 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
 
     function removeLiquidityAndSwap(
         uint256 tokenId, uint128 liquidityAmount, RewardConversion conversion
-    ) override external returns (
+    ) override external nonReentrant returns (
         uint256 amount0, uint256 amount1
     ) {
+        _onlyPositionOwner(tokenId);
         // get postion info
         (
             ,,address token0, address token1, uint24 fee,,,uint128 liquidity,,,,
         ) = nonfungiblePositionManager.positions(tokenId);
         // calc liquidity percent
+        require(liquidity > 0, "No liquidity for position");
         if(liquidityAmount == 0) liquidityAmount = liquidity;
-        // close position and calc total token amount
         // remove liquidity
         (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(
-            INonfungiblePositionManager.DecreaseLiquidityParams({
-                tokenId: tokenId,
-                liquidity: liquidityAmount,
-                amount0Min: 0,
-                amount1Min: 0,
-                deadline: block.timestamp
-            })
+            INonfungiblePositionManager.DecreaseLiquidityParams(
+                tokenId,
+                liquidityAmount,
+                0,
+                0,
+                block.timestamp
+            )
         );
 
         // collect fees
@@ -256,11 +262,13 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
             );
             amount0 = 0;
         } else {
-            if(amount0 > 0) TransferHelper.safeTransfer(token0, msg.sender, amount0);
-            if(amount1 > 0) TransferHelper.safeTransfer(token1, msg.sender, amount1);    
+            /*if(amount0 > 0) {
+                TransferHelper.safeTransferFrom(token0, address(this), msg.sender, amount0);
+            }
+            if(amount1 > 0) {
+                TransferHelper.safeTransferFrom(token1, address(this), msg.sender, amount1);
+            }*/
         }
-
-        nonfungiblePositionManager.burn(tokenId);
     }
 
     //

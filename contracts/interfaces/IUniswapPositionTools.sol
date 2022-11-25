@@ -12,9 +12,6 @@ interface IUniswapPositionTools {
     event RewardUpdated(address account, uint64 totalRewardX64, uint64 compounderRewardX64);
     event TWAPConfigUpdated(address account, uint32 maxTWAPTickDifference, uint32 TWAPSeconds);
 
-    /// @notice The weth address
-    function weth() external view returns (address);
-
     /// @notice The factory address with which this staking contract is compatible
     function factory() external view returns (IUniswapV3Factory);
 

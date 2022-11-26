@@ -5,16 +5,16 @@ const {
 } = require('@nomicfoundation/hardhat-network-helpers')
 const { assert, expect } = require('chai')
 const { ethers, deployments, getNamedAccounts } = require('hardhat')
-const { abi: ERC20 } = require('@openzeppelin/contracts/build/contracts/ERC20.json')
+const { abi: IERC20 } = require('@openzeppelin/contracts/build/contracts/ERC20.json')
 const uniswap = require("../lib/uniswap")
 
-let randomSeed = 4955
+let randomSeed = 1
 const contractName = "UniswapPositionTools"
-const testPositionsCount = 5
 const gasLimit = 1000000
 
 describe("UniswapTools contract", async () => {
-    let accounts, nfPositionManager, testPositions = [], contract;
+    let accounts, nfPositionManager, contract
+    const testPositions = [316343, 100209, 363656, 266715, 225152]
 
     /*
      * Approve tokens spend
@@ -36,24 +36,7 @@ describe("UniswapTools contract", async () => {
      * get random positions with filter
      */
     const getTestPostions = async () => {
-        const positionsCount = await nfPositionManager.totalSupply()
-        while(testPositions.length < testPositionsCount) {
-            const tokenId = await nfPositionManager.tokenByIndex(
-                Math.floor(positionsCount.toNumber() * random())
-            )
-            const position = await uniswap.getPosition(tokenId)
-            // check position balances
-            if(
-                (
-                    position.feeGrowthInside0LastX128.gt(0) ||
-                    position.feeGrowthInside1LastX128.gt(0)
-                ) && JSBI.greaterThan(position.liquidity, JSBI.BigInt(0))
-            ) {
-                // approve token andd to list
-                await approveToken(tokenId)
-                testPositions.push(tokenId.toNumber())
-            }
-        }
+        await Promise.all(testPositions.map(approveToken))
         return testPositions
     }
 
@@ -84,13 +67,24 @@ describe("UniswapTools contract", async () => {
             await contract.connect(ownerSigner).swapAndCompound(
                 tokenId, { gasLimit }
             ).then(tx => tx.wait())
+            await stopImpersonatingAccount(ownerAddress)
             // check new liquidity
+            const [
+                {args: { liquidity }}
+            ] = await contract.connect(ownerSigner).queryFilter(
+                contract.filters.Compounded(ownerAddress, tokenId), -1, "latest"
+            )
             const afterPosition = await uniswap.getPosition(tokenId)
             assert.isTrue(
-                JSBI.greaterThan(afterPosition.liquidity, beforePosition.liquidity),
+                JSBI.equal(
+                    JSBI.add(
+                        JSBI.BigInt(liquidity.toString()),
+                        beforePosition.liquidity
+                    ),
+                    afterPosition.liquidity
+                ),
                 "Liquidity must increase"
             )
-            await stopImpersonatingAccount(ownerAddress)
         }
     })
 
@@ -118,15 +112,20 @@ describe("UniswapTools contract", async () => {
             await contract.connect(ownerSigner).remint(
                 tokenId, newTickLower, newTickUpper, { gasLimit }
             ).then(tx => tx.wait())
-            /*assert.equal(
-                curTickLower, newTickLower,
-                "Lower tick not updated"
-            )
-            assert.equal(
-                curTickUpper, newTickUpper,
-                "Upper tick not updated"
-            )*/
             await stopImpersonatingAccount(ownerAddress)
+            // get new tokenId
+            const [
+                {args: { newTokenId }}
+            ] = await contract.connect(ownerSigner).queryFilter(
+                contract.filters.Reminted(ownerAddress, tokenId), -1, "latest"
+            )
+            // compare current ticks with calculated ticks
+            const {
+                tickLower: curTickLower,
+                tickUpper: curTickUpper,
+            } = await uniswap.getPosition(newTokenId)
+            assert.equal(curTickLower, newTickLower, "Lower tick not updated")
+            assert.equal(curTickUpper, newTickUpper, "Upper tick not updated")
         }
     })
 
@@ -135,9 +134,7 @@ describe("UniswapTools contract", async () => {
             const ownerAddress = await nfPositionManager.ownerOf(tokenId)
             await impersonateAccount(ownerAddress)
             const ownerSigner = await ethers.getSigner(ownerAddress)
-            const {
-                pool: {token0, token1}, amount0, amount1, liquidity, ...pos
-            } = await uniswap.getPosition(tokenId)
+            const { pool: {token0, token1} } = await uniswap.getPosition(tokenId)
             // get balance
             const walletBefore = await Promise.all(
                 [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
@@ -146,23 +143,31 @@ describe("UniswapTools contract", async () => {
             await contract.connect(ownerSigner).removeLiquidityAndSwap(
                 tokenId, 0, 0, { gasLimit }
             ).then(tx => tx.wait())
-            // get updated balance
-            const walletAfter = await Promise.all(
-                [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
+            await stopImpersonatingAccount(ownerAddress)
+            // get amounts
+            const [
+                {args: { amount0, amount1 }}
+            ] = await contract.connect(ownerSigner).queryFilter(
+                contract.filters.LiquidityRemoved(ownerAddress, tokenId), -1, "latest"
             )
             // check new Liquidity
             const {
                 liquidity: afterLiquidity
             } = await uniswap.getPosition(tokenId)
             assert.isTrue(JSBI.equal(afterLiquidity, JSBI.BigInt(0)), `Liquidity = 0`)
+            // get updated balance
+            const walletAfter = await Promise.all(
+                [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
+            )
             // check balances
-            assert.isTrue(JSBI.greaterThanOrEqual(
-                walletAfter[0], JSBI.add(walletBefore[0], amount0.decimalScale)
-            ), `Balance of token0 must been increased by ${amount0.toSignificant()}`)
-            assert.isTrue(JSBI.greaterThanOrEqual(
-                walletAfter[1], JSBI.add(walletBefore[1], amount1.decimalScale)
-            ), `Balance of token1 must been increased by ${amount1.toSignificant()}`)
-            await stopImpersonatingAccount(ownerAddress)
+            assert.isTrue(
+                walletBefore[0].add(amount0).eq(walletAfter[0]),
+                `Balance of token0 must been increased by ${amount0.toString()}`
+            )
+            assert.isTrue(
+                walletBefore[1].add(amount1).eq(walletAfter[1]),
+                `Balance of token1 must been increased by ${amount1.toString()}`
+            )
         }
     })
 
@@ -171,9 +176,7 @@ describe("UniswapTools contract", async () => {
             const ownerAddress = await nfPositionManager.ownerOf(tokenId)
             await impersonateAccount(ownerAddress)
             const ownerSigner = await ethers.getSigner(ownerAddress)
-            const {
-                pool: {token0, token1}, amount0
-            } = await uniswap.getPosition(tokenId)
+            const { pool: {token0, token1} } = await uniswap.getPosition(tokenId)
             // save balances
             const walletBefore = await Promise.all(
                 [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
@@ -182,23 +185,31 @@ describe("UniswapTools contract", async () => {
             await contract.connect(ownerSigner).removeLiquidityAndSwap(
                 tokenId, 0, 1, { gasLimit }
             ).then(tx => tx.wait())
-            // get new balances
-            const walletAfter = await Promise.all(
-                [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
+            await stopImpersonatingAccount(ownerAddress)
+            // get amounts
+            const [
+                {args: { amount0, amount1 }}
+            ] = await contract.connect(ownerSigner).queryFilter(
+                contract.filters.LiquidityRemoved(ownerAddress, tokenId), -1, "latest"
             )
             // check new Liquidity
             const {
                 liquidity: afterLiquidity
             } = await uniswap.getPosition(tokenId)
             assert.isTrue(JSBI.equal(afterLiquidity, JSBI.BigInt(0)), `Liquidity = 0`)
+            // get updated balance
+            const walletAfter = await Promise.all(
+                [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
+            )
             // check balances
-            assert.isTrue(JSBI.greaterThan(
-                walletAfter[0], JSBI.add(walletBefore[0], amount0.decimalScale)
-            ), `Balance of token0 must been increased by ${amount0.toSignificant()}`)
-            assert.isTrue(JSBI.equal(
-                walletAfter[1], walletBefore[1]
-            ), `Balance of token1 must not changed`)
-            await stopImpersonatingAccount(ownerAddress)
+            assert.isTrue(
+                walletAfter[0].sub(walletBefore[0]).eq(amount0),
+                `Balance of token0 must been increased by ${amount0.toString()}`
+            )
+            assert.isTrue(
+                walletAfter[1].sub(walletBefore[1]).eq(amount1),
+                `Balance of token1 must been increased by ${amount1.toString()}`
+            )
         }
     })
 
@@ -207,9 +218,7 @@ describe("UniswapTools contract", async () => {
             const ownerAddress = await nfPositionManager.ownerOf(tokenId)
             await impersonateAccount(ownerAddress)
             const ownerSigner = await ethers.getSigner(ownerAddress)
-            const {
-                pool: {token0, token1}, amount1
-            } = await uniswap.getPosition(tokenId)
+            const { pool: {token0, token1} } = await uniswap.getPosition(tokenId)
             // save balances
             const walletBefore = await Promise.all(
                 [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
@@ -218,27 +227,35 @@ describe("UniswapTools contract", async () => {
             await contract.connect(ownerSigner).removeLiquidityAndSwap(
                 tokenId, 0, 2, { gasLimit }
             ).then(tx => tx.wait())
-            // get new balances
-            const walletAfter = await Promise.all(
-                [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
+            await stopImpersonatingAccount(ownerAddress)
+            // get amounts
+            const [
+                {args: { amount0, amount1 }}
+            ] = await contract.connect(ownerSigner).queryFilter(
+                contract.filters.LiquidityRemoved(ownerAddress, tokenId), -1, "latest"
             )
             // check new Liquidity
             const {
                 liquidity: afterLiquidity
             } = await uniswap.getPosition(tokenId)
             assert.isTrue(JSBI.equal(afterLiquidity, JSBI.BigInt(0)), `Liquidity = 0`)
+            // get updated balance
+            const walletAfter = await Promise.all(
+                [token0, token1].map(t => getTokenBalance(t.address, ownerAddress))
+            )
             // check balances
-            assert.isTrue(JSBI.equal(
-                walletAfter[0], walletBefore[0]
-            ), `Balance of token0 must not changed`)
-            assert.isTrue(JSBI.greaterThan(
-                walletAfter[1], JSBI.add(walletBefore[1], amount1.decimalScale)
-            ), `Balance of token1 must been increased by ${amount1.toSignificant()}`)
-            await stopImpersonatingAccount(ownerAddress)
+            assert.isTrue(
+                walletAfter[0].sub(walletBefore[0]).eq(amount0),
+                `Balance of token0 must been increased by ${amount0.toString()}`
+            )
+            assert.isTrue(
+                walletAfter[1].sub(walletBefore[1]).eq(amount1),
+                `Balance of token1 must been increased by ${amount1.toString()}`
+            )
         }
     })
 
-    it("Partial close position, collect fees", async () => {
+    it("Partial close position", async () => {
         for(let tokenId of testPositions) {
             const ownerAddress = await nfPositionManager.ownerOf(tokenId)
             await impersonateAccount(ownerAddress)
@@ -252,6 +269,7 @@ describe("UniswapTools contract", async () => {
             await contract.connect(ownerSigner).removeLiquidityAndSwap(
                 tokenId, reduceLiquidity.toString(), 0, { gasLimit }
             ).then(tx => tx.wait())
+            await stopImpersonatingAccount(ownerAddress)
 
             // check new liquidity
             const { liquidity: afterLiquidity } = await uniswap.getPosition(tokenId)
@@ -259,11 +277,10 @@ describe("UniswapTools contract", async () => {
                 afterLiquidity,
                 JSBI.subtract(liquidity, reduceLiquidity),
             ), `Liquidity must be reduced`)
-            await stopImpersonatingAccount(ownerAddress)
         }
     })
 
-    it("Deny not owned tokens manipulation", async () => {
+    it("Deny for not owned tokens", async () => {
         for(let tokenId of testPositions) {
             const [spender] = await ethers.getSigners()
             const { liquidity: reduceLiquidity } = await uniswap.getPosition(tokenId)
@@ -284,12 +301,15 @@ describe("UniswapTools contract", async () => {
 })
 
 const getTokenBalance = async (tokenAddress, ownerAddress) => {
-    return (
-        await ethers.getContractAt(ERC20, tokenAddress)
-    ).balanceOf(ownerAddress)
+    const token = await ethers.getContractAt(IERC20, tokenAddress)
+    return token.balanceOf(ownerAddress)
 }
 
 const random = () => {
     var x = Math.sin(randomSeed++) * 10000;
     return x - Math.floor(x);
+}
+
+function randomInteger(min, max) {
+    return Math.floor(random() * (max - min) ) + min;
 }

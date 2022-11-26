@@ -9,8 +9,37 @@ import '@uniswap/v3-periphery/contracts/interfaces/ISwapRouter.sol';
 
 interface IUniswapPositionTools {
     // config changes
-    event RewardUpdated(address account, uint64 totalRewardX64, uint64 compounderRewardX64);
     event TWAPConfigUpdated(address account, uint32 maxTWAPTickDifference, uint32 TWAPSeconds);
+    // events
+    event Compounded(
+        address indexed account,
+        uint256 indexed tokenId,
+        uint128 liquidity,
+        uint256 amount0,
+        uint256 amount1,
+        address token0,
+        address token1
+    );
+
+    event Reminted(
+        address indexed account,
+        uint256 indexed tokenId,
+        uint256 newTokenId,
+        uint128 liquidity,
+        uint256 amount0,
+        uint256 amount1,
+        address token0,
+        address token1
+    );
+
+    event LiquidityRemoved(
+        address indexed account,
+        uint256 indexed tokenId,
+        uint256 amount0,
+        uint256 amount1,
+        address token0,
+        address token1
+    );
 
     /// @notice The factory address with which this staking contract is compatible
     function factory() external view returns (IUniswapV3Factory);
@@ -40,17 +69,18 @@ interface IUniswapPositionTools {
     /**
      * @notice Autocompounds for a given NFT (anyone can call this and gets a percentage of the fees)
      * @param tokenId Autocompound token with tokenId
+     * @return liquidity Amount of new liquidity
      * @return compounded0 Amount of token0 that was compounded
      * @return compounded1 Amount of token1 that was compounded
      */
     function swapAndCompound(uint256 tokenId) external returns (
-        uint256 compounded0, uint256 compounded1
+        uint128 liquidity, uint256 compounded0, uint256 compounded1
     );
 
     function remint(
         uint256 tokenId, int24 tickLower, int24 tickUpper
     ) external returns (
-        uint256 newTokenId, uint256 amount0, uint256 amount1
+        uint256 newTokenId, uint128 newLiquidity, uint256 amount0, uint256 amount1
     );
 
     function removeLiquidityAndSwap(

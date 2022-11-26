@@ -38,7 +38,7 @@ module.exports = {
                 blockNumber: process.env.HARDHAT_FORK_BLOCK ? (
                     parseInt(process.env.HARDHAT_FORK_BLOCK) 
                 ): undefined
-            } : undefined,
+            } : undefined
         },
         goerli: {
             chainId: 5,

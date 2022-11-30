@@ -14,7 +14,7 @@ const gasLimit = 1000000
 
 describe("UniswapTools contract", async () => {
     let accounts, nfPositionManager, contract
-    const testPositions = [316343, 100209, 363656, 266715, 225152]
+    const testPositions = [312783, 144860, 368928, 363354, 367109]
 
     /*
      * Approve tokens spend

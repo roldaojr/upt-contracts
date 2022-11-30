@@ -11,18 +11,17 @@ const main = async () => {
         const tokenId = await nfPositionManager.tokenByIndex(
             randomInteger(0, totalPositions.toNumber())
         )
-        const position = await uniswap.getPosition(tokenId)
+        const position = await nfPositionManager.positions(tokenId)
         // check position balances
-        if(
-            (
-                position.feeGrowthInside0LastX128.gt(0) ||
-                position.feeGrowthInside1LastX128.gt(0)
-            ) && JSBI.greaterThan(position.liquidity, JSBI.BigInt(0))
-        ) {
-            console.debug(tokenId.toNumber())
+        if(position.liquidity.gt(0) && (
+            position.tokensOwed0.gt(0) ||
+            position.tokensOwed1.gt(0)
+        )) {
+            console.info("Found valid position ID: ", tokenId.toNumber())
             positions.push(tokenId.toNumber())
         }
     }
+    console.info("Valid positions found", positions)
 }
 
 function randomInteger(min, max) {

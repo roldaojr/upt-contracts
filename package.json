@@ -17,6 +17,7 @@
   "scripts": {
     "compile": "hardhat compile",
     "deploy": "hardhat deploy",
-    "test": "hardhat test"
+    "test": "hardhat test",
+    "node": "hardhat node"
   }
 }

@@ -32,7 +32,7 @@ module.exports = {
         hardhat: {
             chainId: 1337,
             live: false,
-            tags: ["test", "dev"],
+            tags: ["test", "local"],
             forking: process.env.HARDHAT_FORK_RPC_URL ? {
                 url: process.env.HARDHAT_FORK_RPC_URL,
                 blockNumber: process.env.HARDHAT_FORK_BLOCK ? (
@@ -42,22 +42,50 @@ module.exports = {
         },
         goerli: {
             chainId: 5,
-            url: `https://goerli.infura.io/v3/${process.env.INFURA_KEY}`,
+            url: `https://rpc.ankr.com/eth_goerli`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["staging"]
         },
         mumbai: {
             chainId: 80001,
-            url: `https://polygon-mumbai.infura.io/v3/${process.env.INFURA_KEY}`,
+            url: `https://rpc.ankr.com/polygon_mumbai`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["staging"],
-        }
+        },
+        mainnet: {
+            chainId: 1,
+            url: `https://rpc.ankr.com/eth`,
+            accounts: [process.env.ACCOUNT_PRIVATE_KEY],
+            live: true,
+            tags: ["production"],
+        },
+        polygon: {
+            chainId: 137,
+            url: `https://rpc.ankr.com/polygon`,
+            accounts: [process.env.ACCOUNT_PRIVATE_KEY],
+            live: true,
+            tags: ["production"],
+        },
+        arbitrum: {
+            chainId: 42161,
+            url: `https://rpc.ankr.com/arbitrum`,
+            accounts: [process.env.ACCOUNT_PRIVATE_KEY],
+            live: true,
+            tags: ["production"],
+        },
+        optimism: {
+            chainId: 10,
+            url: `https://rpc.ankr.com/optimism`,
+            accounts: [process.env.ACCOUNT_PRIVATE_KEY],
+            live: true,
+            tags: ["production"],
+        },
     },
     namedAccounts: {
-        spender: { default: 0 },
-        deployer: { default: 1 },
+        deployer: { default: 0 },
+        spender: { default: 1 },
         other: { default: 2 },
         // known contract addresses
         UniswapV3NonfungiblePositionManager: {

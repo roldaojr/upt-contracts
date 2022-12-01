@@ -44,7 +44,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
     }
 
     // state used during autocompound execution
-    struct CompoundState {
+    struct PriceRatioState {
         uint256 amount0;
         uint256 amount1;
         uint256 priceX96;
@@ -69,7 +69,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         uint128 liquidity, uint256 compounded0, uint256 compounded1
     ) {
         _tokenOwnerCheck(tokenId);
-        CompoundState memory state;
+        PriceRatioState memory state;
         // collect fees
         (state.amount0, state.amount1) = nonfungiblePositionManager.collect(
             INonfungiblePositionManager.CollectParams(
@@ -77,7 +77,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
             )
         );
 
-        // only if there are balances to work with - start autocompounding process
+        // only if there are balances to work with - start compounding process
         if (state.amount0 > 0 || state.amount1 > 0) {
             // get position info
             (
@@ -87,7 +87,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
 
             // checks oracle for fair price - swaps to position ratio (considering estimated reward) - calculates max amount to be added
             (
-                state.amount0, state.amount1, state.priceX96
+                state.amount0, state.amount1,
             ) = _swapToPriceRatio(SwapParams(
                 state.token0,
                 state.token1,
@@ -96,8 +96,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
                 state.tickUpper,
                 state.amount0,
                 state.amount1,
-                block.timestamp,
-                true
+                block.timestamp
             ));
 
             // approve tokens for nonfungiblePositionManager
@@ -121,6 +120,9 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
             );
 
             emit Compounded(msg.sender, tokenId, liquidity, compounded0, compounded1, state.token0, state.token1);
+        } else {
+            // get current liquidity
+            (,,,,,,,liquidity,,,,) = nonfungiblePositionManager.positions(tokenId);
         }
     }
 
@@ -130,11 +132,12 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         uint256 newTokenId, uint128 newLiquidity, uint256 amount0, uint256 amount1
     ) {
         _tokenOwnerCheck(tokenId);
-        CompoundState memory state;
-        // get position info
+        PriceRatioState memory state;
         uint128 liquidity;
-        (, , state.token0, state.token1, state.fee, , , liquidity, , , , ) =
-            nonfungiblePositionManager.positions(tokenId);
+        // get position info
+        (
+            ,, state.token0, state.token1, state.fee,,, liquidity,,,,
+        ) = nonfungiblePositionManager.positions(tokenId);
         // remove liquidity
         (state.amount0, state.amount1) = nonfungiblePositionManager.decreaseLiquidity(
             INonfungiblePositionManager.DecreaseLiquidityParams(
@@ -148,9 +151,9 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
             )
         );
         nonfungiblePositionManager.burn(tokenId);
-        // checks oracle for fair price - swaps to position ratio (considering estimated reward) - calculates max amount to be added
+        // checks oracle for fair price - swaps to position ratio and calculates max amount to be added
         (
-            state.amount0, state.amount1, state.priceX96
+            state.amount0, state.amount1,
         ) = _swapToPriceRatio(SwapParams(
             state.token0,
             state.token1,
@@ -159,8 +162,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
             tickUpper,
             state.amount0,
             state.amount1,
-            block.timestamp,
-            true
+            block.timestamp
         ));
 
         // approve tokens for nonfungiblePositionManager
@@ -200,8 +202,9 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         (
             ,,address token0, address token1, uint24 fee,,,uint128 liquidity,,,,
         ) = nonfungiblePositionManager.positions(tokenId);
-        // calc liquidity percent
+
         require(liquidity > 0, "No liquidity for position");
+
         if(liquidityAmount == 0) liquidityAmount = liquidity;
         // remove liquidity
         (amount0, amount1) = nonfungiblePositionManager.decreaseLiquidity(
@@ -256,14 +259,14 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
 
     function _getPrice(address token0, address token1, uint24 fee) view internal returns (uint160 sqrtPriceX96) {
         int24 tick;
-        IUniswapV3Pool pool = IUniswapV3Pool(factory.getPool(token0, token1, fee));   
+        IUniswapV3Pool pool = IUniswapV3Pool(factory.getPool(token0, token1, fee));
         (sqrtPriceX96, tick,,,,,) = pool.slot0();
         // how many seconds are needed for TWAP protection
         uint32 tSecs = TWAPSeconds;
         if (tSecs > 0) {
             // check that price is not too far from TWAP (protect from price manipulation attacks)
             (int24 otherTick, bool twapOk) = _getTWAPTick(pool, tSecs);
-            require(twapOk, "No TWAP price");
+            require(twapOk, "Invalid TWAP price");
             _requireMaxTickDifference(tick, otherTick, maxTWAPTickDifference);
         }
     }
@@ -326,7 +329,6 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         uint256 amount0;
         uint256 amount1;
         uint256 deadline;
-        bool doSwap;
     }
 
     // checks oracle for fair price - swaps to position ratio - calculates max amount to be added

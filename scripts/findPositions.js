@@ -1,4 +1,3 @@
-const JSBI = require('JSBI')
 const uniswap = require("../lib/uniswap")
 
 const main = async () => {

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0-or-later
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.7.6;
 pragma abicoder v2;
 
@@ -30,7 +30,6 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
     uint32 public override TWAPSeconds = 60;
 
     // uniswap v3 components
-    IUniswapV3Factory public override factory;
     INonfungiblePositionManager public override nonfungiblePositionManager;
     ISwapRouter public override swapRouter;
 
@@ -39,7 +38,6 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
         ISwapRouter _swapRouter
     ) {
         nonfungiblePositionManager = _nonfungiblePositionManager;
-        factory = IUniswapV3Factory(nonfungiblePositionManager.factory());
         swapRouter = _swapRouter;
     }
 
@@ -259,6 +257,7 @@ contract UniswapPositionTools is IUniswapPositionTools, ReentrancyGuard, Ownable
 
     function _getPrice(address token0, address token1, uint24 fee) view internal returns (uint160 sqrtPriceX96) {
         int24 tick;
+        IUniswapV3Factory factory = IUniswapV3Factory(nonfungiblePositionManager.factory());
         IUniswapV3Pool pool = IUniswapV3Pool(factory.getPool(token0, token1, fee));
         (sqrtPriceX96, tick,,,,,) = pool.slot0();
         // how many seconds are needed for TWAP protection

@@ -41,9 +41,6 @@ interface IUniswapPositionTools {
         address token1
     );
 
-    /// @notice The factory address with which this staking contract is compatible
-    function factory() external view returns (IUniswapV3Factory);
-
     /// @notice The nonfungible position manager address with which this staking contract is compatible
     function nonfungiblePositionManager() external view returns (INonfungiblePositionManager);
 

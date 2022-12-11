@@ -10,8 +10,8 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
     await deploy(contractName, {
         from: deployer,
         args: [UniswapV3NonfungiblePositionManager, UniswapV3SwapRouter],
-        deterministicDeployment: process.env.CONTRACT_KEY ?? true,
-        gaslimit: 4000000,
+        deterministicDeployment: process.env.CONTRACT_SALT ?? true,
+        gasLimit: 3200000,
         log: true
     })
 }

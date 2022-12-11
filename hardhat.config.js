@@ -45,7 +45,8 @@ module.exports = {
             url: `https://rpc.ankr.com/eth_goerli`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
-            tags: ["staging"]
+            tags: ["staging"],
+            verify: { etherscan: { apiKey: process.env.ETHSCAN_API_KEY || "" } }
         },
         mumbai: {
             chainId: 80001,
@@ -60,6 +61,7 @@ module.exports = {
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
+            verify: { etherscan: { apiKey: process.env.ETHSCAN_API_KEY || "" } }
         },
         polygon: {
             chainId: 137,
@@ -67,6 +69,7 @@ module.exports = {
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
+            verify: { etherscan: { apiKey: process.env.POLYGONSCAN_API_KEY || "" } }
         },
         arbitrum: {
             chainId: 42161,
@@ -74,6 +77,7 @@ module.exports = {
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
+            verify: { etherscan: { apiKey: process.env.ARBSCAN_API_KEY || "" } }
         },
         optimism: {
             chainId: 10,
@@ -81,6 +85,7 @@ module.exports = {
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
+            verify: { etherscan: { apiKey: process.env.OPETHSCAN_API_KEY || "" } }
         },
     },
     namedAccounts: {

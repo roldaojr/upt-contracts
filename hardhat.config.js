@@ -57,7 +57,7 @@ module.exports = {
         },
         mainnet: {
             chainId: 1,
-            url: `https://rpc.ankr.com/eth`,
+            url: `https://1rpc.io/eth`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
@@ -65,7 +65,7 @@ module.exports = {
         },
         polygon: {
             chainId: 137,
-            url: `https://rpc.ankr.com/polygon`,
+            url: `https://1rpc.io/matic`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
@@ -73,7 +73,7 @@ module.exports = {
         },
         arbitrum: {
             chainId: 42161,
-            url: `https://rpc.ankr.com/arbitrum`,
+            url: `https://1rpc.io/arb`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],
@@ -81,7 +81,7 @@ module.exports = {
         },
         optimism: {
             chainId: 10,
-            url: `https://rpc.ankr.com/optimism`,
+            url: `https://1rpc.io/op`,
             accounts: [process.env.ACCOUNT_PRIVATE_KEY],
             live: true,
             tags: ["production"],

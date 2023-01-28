@@ -11,7 +11,7 @@ module.exports = async ({ getNamedAccounts, deployments }) => {
         from: deployer,
         args: [UniswapV3NonfungiblePositionManager, UniswapV3SwapRouter],
         deterministicDeployment: process.env.CONTRACT_SALT ?? true,
-        gasLimit: 3200000,
+        gasLimit: 25000000,
         log: true
     })
 }
